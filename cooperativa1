@@ -1,0 +1,77 @@
+#include <stdio.h> 
+#include <string.h> 
+#define  MAX 1000 
+
+struct cadastrarProduto { 
+
+    char produtor [100]; 
+    char nomeProduto [100]; 
+    int identif; 
+    int quantEstoque; 
+    float precoAtual; 
+    float precoAnterior; 
+    char categoria [100]; 
+
+}; 
+
+int menu (char x, int a, int b, int c, int d) {
+
+    int opcao = -1; 
+
+    while (opcao != 0){ 
+
+        printf ("Gestão de produtos:\n"); 
+        printf ("1. Cadastro.\n");
+        printf ("2. Consulta.\n");
+        printf ("3. Alterar.\n");
+        printf ("4. Remover.\n");
+        printf ("5. Exibir produtos.\n"); 
+        printf ("0. Sair"); 
+        printf ("Escolha uma opção:\n"); 
+        scanf ("%d", &opcao); 
+
+
+        switch (opcao){ 
+
+            case 1: 
+
+            cadastrarProduto ( , ); 
+            salvarArquivo ( , ); 
+
+            break; 
+
+            case 2: 
+
+            consultarProduto ( , ); 
+            break; 
+
+            case 3:
+
+            alterarProduto ( , ); 
+            salvarArquivo ( , ); 
+
+            break; 
+
+            case 4:
+
+            removerProduto ( , ); 
+            salvarArquivo ( , ); 
+
+            break; 
+
+            case 5: 
+
+            exibirProdutos ( , ); 
+
+            break; 
+
+            case 0: 
+
+            printf("\nSalvando dados e encerrando o sistema...\n");
+                break;
+
+            default:
+                printf("\nOpcao invalida! Digite um numero entre 0 e 5.\n");
+                break;
+        }
+    }
