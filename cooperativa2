@@ -1,0 +1,66 @@
+/*
+- ============================================================================
+- PROJETO: SISTEMA DE GESTÃO DE COOPERATIVA AGRÍCOLA (CRUD EM C)
+- ============================================================================
+- Características deste código:
+- - Uso padrão de 'struct Produto' (sem typedef);
+- - Persistência em arquivo de texto ('cooperativa.txt');
+- - Divisão clara em funções (CRUD completo + menu dedicado) acima da main;
+- - Uso de ponteiros e alocação dinâmica (malloc, realloc, free).
+- ============================================================================
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// Nome do arquivo de texto onde os registros serão salvos
+#define ARQUIVO_DADOS "cooperativa.txt"
+
+/*
+- ----------------------------------------------------------------------------
+- 1. MODELAGEM DE DADOS (STRUCT PADRÃO)
+- ----------------------------------------------------------------------------
+- Define a estrutura de um produto da cooperativa.
+- Sempre que formos declarar uma variável ou ponteiro deste tipo,
+- usaremos 'struct Produto'.
+ */
+struct Produto {
+    int codigo;                 // Identificador único do registro
+    char nome[60];              // Nome do produto agrícola
+    int quantidadeEstoque;      // Quantidade disponível em estoque
+    float precoAtual;           // Preço unitário atual
+    float precoAnterior;        // Preço unitário praticado anteriormente
+    char produtor[60];          // Nome do produtor cooperado
+    char categoria[40];         // Categoria (Grãos, Hortifrúti, Insumos, etc.)
+};
+
+/*
+- ============================================================================
+- 2. FUNÇÕES AUXILIARES
+- ============================================================================
+ */
+
+// Limpa o ENTER residual para que nao pule automaticamente a proxima linha sem que vc digite
+void limparBuffer() {
+    while (getchar() != '\n');
+}
+
+// Le texto composto por duas strings sem comer palavra e remove a quebra de linha \n
+void lerString(char *destino, int tamanho) { // dois parametros, o endereco do vetor no ponteiro onde a palavra sera guardada e o limite maximo de letras q cabem nesse vetor
+    fgets(destino, tamanho, stdin); // le oq o usuario digita, incluindo espacos em branco e respeita o limite do tamanho p nao estourar a memoria, guarda td dentro do destino 
+    int len = strlen(destino); // conta qntos caracteres foram digitados e guarda esse numero na variavel len, digitou soja, fgets le soja\n e len vale 5
+    if (len > 0 && destino[len - 1] == '\n') { // verifica se o texto n ta vazio e se o ultimo caractere foi enter
+        destino[len - 1] = '\0'; // se havia um \n ele eh substituido pelo caractere nulo q indica onde o texto realmente acaba \0, assim soja\n vira só soja e evita quebra de linha indesejada
+    }
+}
+
+// Percorre c um laço FOR comparando o codigo, evita duplicidade no cadastro e torna possivel a consulta, alteração e remoção
+int buscarIndicePorCodigo(struct Produto *lista, int total, int codigoBusca) {
+    for (int i = 0; i < total; i++) { // percorre o vetor 
+        if (lista[i].codigo == codigoBusca) { // compara o codigo do produto com o codigo q o usuario digitou
+            return i; // se encontrar retorna a posição no vetor
+        }
+    }
+    return -1; // retorna -1 se não encontrar
+}
