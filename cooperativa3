@@ -1,0 +1,507 @@
+/*
+- ============================================================================
+- PROJETO: SISTEMA DE GESTÃO DE COOPERATIVA AGRÍCOLA (CRUD EM C)
+- ============================================================================
+- Características deste código:
+- - Uso padrão de 'struct Produto' (sem typedef);
+- - Persistência em arquivo de texto ('cooperativa.txt');
+- - Divisão clara em funções (CRUD completo + menu dedicado) acima da main;
+- - Uso de ponteiros e alocação dinâmica (malloc, realloc, free).
+- ============================================================================
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// Nome do arquivo de texto onde os registros serão salvos
+#define ARQUIVO_DADOS "cooperativa.txt"
+
+/*
+- ----------------------------------------------------------------------------
+- 1. MODELAGEM DE DADOS (STRUCT PADRÃO)
+- ----------------------------------------------------------------------------
+- Define a estrutura de um produto da cooperativa.
+- Sempre que formos declarar uma variável ou ponteiro deste tipo,
+- usaremos 'struct Produto'.
+ */
+struct Produto {
+    int codigo;                 // Identificador único do registro
+    char nome[60];              // Nome do produto agrícola
+    int quantidadeEstoque;      // Quantidade disponível em estoque
+    float precoAtual;           // Preço unitário atual
+    float precoAnterior;        // Preço unitário praticado anteriormente
+    char produtor[60];          // Nome do produtor cooperado
+    char categoria[40];         // Categoria (Grãos, Hortifrúti, Insumos, etc.)
+};
+
+/*
+- ============================================================================
+- 2. FUNÇÕES AUXILIARES
+- ============================================================================
+ */
+
+// Limpa o ENTER residual para que nao pule automaticamente a proxima linha sem que vc digite
+void limparBuffer() {
+    while (getchar() != '\n');
+}
+
+// Le texto composto por duas strings sem comer palavra e remove a quebra de linha \n
+void lerString(char *destino, int tamanho) { // dois parametros, o endereco do vetor no ponteiro onde a palavra sera guardada e o limite maximo de letras q cabem nesse vetor
+    fgets(destino, tamanho, stdin); // le oq o usuario digita, incluindo espacos em branco e respeita o limite do tamanho p nao estourar a memoria, guarda td dentro do destino 
+    int len = strlen(destino); // conta qntos caracteres foram digitados e guarda esse numero na variavel len, digitou soja, fgets le soja\n e len vale 5
+    if (len > 0 && destino[len - 1] == '\n') { // verifica se o texto n ta vazio e se o ultimo caractere foi enter
+        destino[len - 1] = '\0'; // se havia um \n ele eh substituido pelo caractere nulo q indica onde o texto realmente acaba \0, assim soja\n vira só soja e evita quebra de linha indesejada
+    }
+}
+
+// Percorre c um laço FOR comparando o codigo, evita duplicidade no cadastro e torna possivel a consulta, alteração e remoção
+int buscarIndicePorCodigo(struct Produto *lista, int total, int codigoBusca) {
+    for (int i = 0; i < total; i++) { // percorre o vetor 
+        if (lista[i].codigo == codigoBusca) { // compara o codigo do produto com o codigo q o usuario digitou
+            return i; // se encontrar retorna a posição no vetor
+        }
+    }
+    return -1; // retorna -1 se não encontrar
+}
+
+/*
+- ============================================================================
+- 3. PERSISTÊNCIA EM ARQUIVO TEXTO (.TXT)
+- ============================================================================
+ */
+
+// Le linha por linha e usa realloc p criar espaço a mais na memoria, reconstroi a lista antes DO programa ser fechado
+void carregarDadosArquivo(struct Produto **lista, int *total) { //ponteiro duplo pq a funcao vai alterar o endereço onde o vetor dinamico comeca via realloc e imprime na main
+    FILE *arquivo = fopen(ARQUIVO_DADOS, "r"); //tenta abrir no modo read-leitura, le apenas um q ja existe e n cria um novo 
+
+    // Se o arquivo ainda não existe, começa com a lista vazia
+    if (arquivo == NULL) {
+        printf("Arquivo '%s' ainda nao existe. Iniciando base vazia.\n", ARQUIVO_DADOS);
+        *lista = NULL;
+        *total = 0;
+        return;
+    }
+
+    *lista = NULL;
+    *total = 0;
+    struct Produto temp; // garante q o ponteiro da lista e o contador comecem zerados antes da leitura, struct temporaria q serve de rascunho enquanto le cada linha do arquivo 
+
+    // Lê cada linha do arquivo TXT separada por ponto e vírgula (;)
+    while (fscanf(arquivo, "%d;%59[^;];%d;%f;%f;%59[^;];%39[^\n]\n",
+                  &temp.codigo,
+                  temp.nome,
+                  &temp.quantidadeEstoque,
+                  &temp.precoAtual,
+                  &temp.precoAnterior,
+                  temp.produtor,
+                  temp.categoria) == 7) { //le os produtos sem quebra de linha e le as 7 linhas de informações
+
+        // Expande o vetor dinâmico para guardar o registro lido
+        struct Produto *novoBloco = (struct Produto *)realloc(*lista, (*total + 1) * sizeof(struct Produto));
+        // para cada produto lido no arquivo o realloc aumenta o tamanho do vetor dinamico na memoria ram p caber mais 1 elemento usando o total + 1 
+
+        if (novoBloco == NULL) {
+            printf("ERRO CRITICO: Falha ao alocar memoria ao ler o arquivo!\n");
+            fclose(arquivo);
+            return;
+        } // confere se o pc tem memoria o suficiente, se n tiver, fecha o arquivo por segurança 
+
+        *lista = novoBloco; // att o ponteiro lista c novo endereço do realloc 
+        (*lista)[*total] = temp; // copia os dados p nova posicao livro no final do vetor 
+        (*total)++; // soma +1 no final do contador 
+    }
+
+    printf("%d produto(s) carregado(s) de '%s'.\n", *total, ARQUIVO_DADOS);
+    fclose(arquivo); // exibe qntos registro foram feitos e executa fclose p liberar o arquivo no sistema 
+}
+
+// Abre o txt no modo escrita e escreve cada produto em uma linha formada com FPRINTF
+void salvarDadosArquivo(struct Produto *lista, int total) { //apenas leitura da memoria, sem ponteiro duplo pq ta apenas lendo o tamanho p copiar os dados no disco 
+    FILE *arquivo = fopen(ARQUIVO_DADOS, "w"); //abre o arquivo no modo write, se o arquivo n existir ele eh criado automaticamente, se ja existir o conteudo anterior eh substituido pela versao mais recente
+
+    if (arquivo == NULL) {
+        printf("ERRO: Nao foi possivel abrir o arquivo '%s' para salvar!\n", ARQUIVO_DADOS);
+        return;
+    }// verifica se o sistema operacional permitiu abrir ou criar o arquivo antes de tentar esrever 
+
+    // Escreve cada produto em uma linha separado por ';'
+    for (int i = 0; i < total; i++) {
+        fprintf(arquivo, "%d;%s;%d;%.2f;%.2f;%s;%s\n",
+                lista[i].codigo,
+                lista[i].nome,
+                lista[i].quantidadeEstoque,
+                lista[i].precoAtual,
+                lista[i].precoAnterior,
+                lista[i].produtor,
+                lista[i].categoria);
+    }//guardado dentro da struct produto, em ponteiro p alterar o valor dentro da struct 
+
+    fclose(arquivo);
+}
+
+/*
+- ============================================================================
+- 4. OPERAÇÕES CRUD (CADASTRAR, CONSULTAR, ALTERAR, REMOVER, EXIBIR)
+- ============================================================================
+ */
+
+// 1. CADASTRAR (Create): usa buscarIndicePorCodigo p garantir q ele nao existe, le os demais dados e usa realloc p aumentar o vetor em +1 posicao
+void cadastrarProduto(struct Produto **lista, int *total) { //cadastrar um novo item aumenta o vetor na memoria e soma + 1, ponteiros permite q faça alteracoes dentro e modifique as variaveis da main
+                                                             //*lista eh o vetor original da main, **lista o primeiro produto guardado dentro do vetor original
+    struct Produto novo;                                   
+
+    printf("\n--- CADASTRAR NOVO PRODUTO ---\n");
+    printf("Codigo unico do produto: ");
+    scanf("%d", &novo.codigo);
+    limparBuffer();
+
+    // Verifica se o código já existe
+    if (buscarIndicePorCodigo(*lista, *total, novo.codigo) != -1) { // se js tiver o codigo, encerra a operacao 
+        printf("AVISO: Ja existe um produto cadastrado com o codigo %d!\n", novo.codigo);
+        return;
+    }
+
+    printf("Nome do produto: ");
+    lerString(novo.nome, sizeof(novo.nome));
+
+    printf("Categoria (ex: Graos, Hortifruti, Insumos): ");
+    lerString(novo.categoria, sizeof(novo.categoria));
+
+    printf("Nome do produtor cooperado: ");
+    lerString(novo.produtor, sizeof(novo.produtor));
+
+    printf("Quantidade em estoque: ");
+    scanf("%d", &novo.quantidadeEstoque);
+    limparBuffer();
+
+    printf("Preco atual (R$): ");
+    scanf("%f", &novo.precoAtual);
+    limparBuffer();
+
+    printf("Preco anterior (R$) [digite 0 se for novo]: ");
+    scanf("%f", &novo.precoAnterior);
+    limparBuffer();
+
+    // Realoca a memória dinamicamente para adicionar +1 produto
+    struct Produto *temp = (struct Produto *)realloc(*lista, (*total + 1) * sizeof(struct Produto)); // se der certo o cadastro, ele cria um espaco e copia o cadastro dentro da lista original 
+
+    if (temp == NULL) {
+        printf("ERRO: Memoria insuficiente para cadastrar!\n");
+        return;
+    }
+
+    *lista = temp;
+    (*lista)[*total] = novo;
+    (*total)++; // copia na nova posicao livre e att o total antes de salvarno txt
+
+    // Salva imediatamente no arquivo TXT
+    salvarDadosArquivo(*lista, *total);
+    printf("SUCESSO: Produto '%s' cadastrado e salvo!\n", novo.nome);
+}
+
+// 2. CONSULTAR POR CÓDIGO (Read): pede o codigo e localiza sua posicao no vetor e usa um ponteiro p STRUCT PRODUTO p acessar e imprimir os detalhes
+void consultarProduto(struct Produto *lista, int total) {
+    if (total == 0) {
+        printf("\nNenhum produto cadastrado no sistema.\n");
+        return;
+    }
+
+    int codigoBusca;
+    printf("\n--- CONSULTAR PRODUTO ---\n");
+    printf("Digite o codigo do produto: ");
+    scanf("%d", &codigoBusca);
+    limparBuffer();
+
+    int indice = buscarIndicePorCodigo(lista, total, codigoBusca);
+
+    if (indice == -1) {
+        printf("Produto com codigo %d nao encontrado.\n", codigoBusca);
+        return;
+    }
+
+    // Ponteiro apontando para o produto encontrado
+    struct Produto *p = &lista[indice]; 
+
+    printf("\n========================================\n");
+    printf("DADOS DO PRODUTO (CODIGO: %d)\n", p->codigo);
+    printf("========================================\n");
+    printf("Nome do Produto   : %s\n", p->nome);
+    printf("Categoria         : %s\n", p->categoria);
+    printf("Produtor          : %s\n", p->produtor);
+    printf("Qtd. em Estoque   : %d\n", p->quantidadeEstoque);
+    printf("Preco Anterior    : R$ %.2f\n", p->precoAnterior);
+    printf("Preco Atual       : R$ %.2f\n", p->precoAtual);
+    printf("========================================\n");
+}
+
+// 3. ALTERAR POR CÓDIGO (Update): localiza o produto pelo codigo e abre um submenu p escolher qual campo edita, copia o valor antigo p precoAnterior antes de gravar o novo valor
+void alterarProduto(struct Produto *lista, int total) {
+    if (total == 0) {
+        printf("\nNenhum produto cadastrado para alterar.\n");
+        return;
+    }
+
+    int codigoBusca;
+    printf("\n--- ALTERAR PRODUTO ---\n");
+    printf("Digite o codigo do produto a alterar: ");
+    scanf("%d", &codigoBusca);
+    limparBuffer();
+
+    int indice = buscarIndicePorCodigo(lista, total, codigoBusca);
+
+    if (indice == -1) {
+        printf("Produto com codigo %d nao encontrado.\n", codigoBusca);
+        return;
+    }
+
+    struct Produto *p = &lista[indice];
+    int opcaoAlterar = -1;
+    float novoPreco;
+
+    while (opcaoAlterar != 0) {
+        printf("\nEditando [%d - %s]:\n", p->codigo, p->nome);
+        printf("1. Alterar Nome\n");
+        printf("2. Alterar Categoria\n");
+        printf("3. Alterar Produtor\n");
+        printf("4. Alterar Quantidade em Estoque\n");
+        printf("5. Alterar Preco Atual (salva o antigo em Preco Anterior)\n");
+        printf("6. Alterar Todos os Campos\n");
+        printf("0. Concluir e Salvar no Arquivo\n");
+        printf("Escolha uma opcao: ");
+        scanf("%d", &opcaoAlterar);
+        limparBuffer();
+
+        switch (opcaoAlterar) {
+            case 1:
+                printf("Novo nome: ");
+                lerString(p->nome, sizeof(p->nome));
+                break;
+
+            case 2:
+                printf("Nova categoria: ");
+                lerString(p->categoria, sizeof(p->categoria));
+                break;
+
+            case 3:
+                printf("Novo produtor: ");
+                lerString(p->produtor, sizeof(p->produtor));
+                break;
+
+            case 4:
+                printf("Nova quantidade em estoque: ");
+                scanf("%d", &p->quantidadeEstoque);
+                limparBuffer();
+                break;
+
+            case 5:
+                printf("Novo preco atual (R$): ");
+                scanf("%f", &novoPreco);
+                limparBuffer();
+                p->precoAnterior = p->precoAtual; // Guarda histórico
+                p->precoAtual = novoPreco;
+                printf("Preco anterior atualizado para R$ %.2f.\n", p->precoAnterior);
+                break;
+
+            case 6:
+                printf("Novo nome: ");
+                lerString(p->nome, sizeof(p->nome));
+                printf("Nova categoria: ");
+                lerString(p->categoria, sizeof(p->categoria));
+                printf("Novo produtor: ");
+                lerString(p->produtor, sizeof(p->produtor));
+                printf("Nova quantidade em estoque: ");
+                scanf("%d", &p->quantidadeEstoque);
+                limparBuffer();
+                printf("Novo preco atual (R$): ");
+                scanf("%f", &novoPreco);
+                limparBuffer();
+                p->precoAnterior = p->precoAtual;
+                p->precoAtual = novoPreco;
+                break;
+
+            case 0:
+                salvarDadosArquivo(lista, total);
+                printf("Alteracoes salvas com sucesso em '%s'!\n", ARQUIVO_DADOS);
+                break;
+
+            default:
+                printf("Opcao invalida!\n");
+                break;
+        }
+    }
+}
+
+// 4. REMOVER POR CÓDIGO (Delete): localiza pelo codigo, pede confirmacao e se confirmado usa um laco FOR p puxar todos os itens p posicao anterior (lista[i] = lista[i + 1]), cobre o espaco excluido, dps reduz o totalProdutos, diminui o tamanho da memoria alocada c realloc e atualiza o arquivo
+void removerProduto(struct Produto **lista, int *total) {
+    if (*total == 0) {
+        printf("\nNenhum produto cadastrado para remover.\n");
+        return;
+    }
+
+    int codigoBusca;
+    printf("\n--- REMOVER PRODUTO ---\n");
+    printf("Digite o codigo do produto a excluir: ");
+    scanf("%d", &codigoBusca);
+    limparBuffer();
+
+    int indice = buscarIndicePorCodigo(*lista, *total, codigoBusca);
+
+    if (indice == -1) {
+        printf("Produto com codigo %d nao encontrado.\n", codigoBusca);
+        return;
+    }
+
+    char confirmacao;
+    printf("Deseja realmente excluir '%s' (Codigo %d)? (S/N): ",
+           (*lista)[indice].nome, (*lista)[indice].codigo);
+    scanf("%c", &confirmacao);
+    limparBuffer();
+
+    if (confirmacao != 'S' && confirmacao != 's') {
+        printf("Exclusao cancelada.\n");
+        return;
+    }
+
+    // Desloca os registros seguintes para preencher a posição removida
+    for (int i = indice; i < (*total) - 1; i++) {
+        (*lista)[i] = (*lista)[i + 1];
+    }
+
+    (*total)--;
+
+    // Redimensiona a memória alocada
+    if (*total == 0) {
+        free(*lista);
+        *lista = NULL;
+    } else {
+        struct Produto *temp = (struct Produto *)realloc(*lista, (*total) * sizeof(struct Produto));
+        if (temp != NULL) {
+            *lista = temp;
+        }
+    }
+
+    salvarDadosArquivo(*lista, *total);
+    printf("Produto removido com sucesso!\n");
+}
+
+// 5. EXIBIR TODOS OS REGISTROS (Listagem): verifica se ha itens cadastrados e percorre todo o vetor dinamico com um FOR, imprime os registros alinhados em colunas p visualização geral Do estoque da cooperativa
+void exibirTodosProdutos(struct Produto *lista, int total) {
+    if (total == 0) {
+        printf("\nNenhum produto cadastrado na cooperativa.\n");
+        return;
+    }
+
+    printf("\n=========================================================================================================\n");
+    printf("                                  ESTOQUE DA COOPERATIVA AGRICOLA (%d ITENS)\n", total);
+    printf("=========================================================================================================\n");
+    printf("%-6s | %-20s | %-14s | %-18s | %-8s | %-11s | %-11s\n",
+           "COD", "PRODUTO", "CATEGORIA", "PRODUTOR", "ESTOQUE", "PRECO ANT.", "PRECO ATUAL");
+    printf("---------------------------------------------------------------------------------------------------------\n");
+
+    for (int i = 0; i < total; i++) {
+        printf("%-6d | %-20.20s | %-14.14s | %-18.18s | %-8d | R$ %-8.2f | R$ %-8.2f\n",
+               lista[i].codigo,
+               lista[i].nome,
+               lista[i].categoria,
+               lista[i].produtor,
+               lista[i].quantidadeEstoque,
+               lista[i].precoAnterior,
+               lista[i].precoAtual);
+    }
+
+    printf("=========================================================================================================\n");
+}
+
+/*
+- ============================================================================
+- 5. MENU PRINCIPAL (WHILE + SWITCH-CASE)
+- ============================================================================
+ */
+
+// Mantem o programa rodando continuamente atraves de um laco WHILE, a cada volta exibe as opcoes na tela, le a escolha DO usuario e usa um SWITCH CASE p direcionar a execucao CRUD correspondente
+void executarMenu(struct Produto **lista, int *total) {
+    int opcao = -1;
+
+    while (opcao != 0) {
+        printf("\n============================================\n");
+        printf("      COOPERATIVA AGRICOLA - MENU CRUD      \n");
+        printf("============================================\n");
+        printf("1. Cadastrar Produto\n");
+        printf("2. Consultar Produto (por codigo)\n");
+        printf("3. Alterar Produto\n");
+        printf("4. Remover Produto\n");
+        printf("5. Exibir Todos os Produtos\n");
+        printf("0. Sair\n");
+        printf("--------------------------------------------\n");
+        printf("Escolha uma opcao: ");
+
+        if (scanf("%d", &opcao) != 1) {
+            limparBuffer();
+            printf("Entrada invalida! Digite apenas numeros.\n");
+            opcao = -1;
+            continue;
+        }
+        limparBuffer();
+
+        switch (opcao) {
+            case 1:
+                cadastrarProduto(lista, total);
+                break;
+
+            case 2:
+                consultarProduto(*lista, *total);
+                break;
+
+            case 3:
+                alterarProduto(*lista, *total);
+                break;
+
+            case 4:
+                removerProduto(lista, total);
+                break;
+
+            case 5:
+                exibirTodosProdutos(*lista, *total);
+                break;
+
+            case 0:
+                printf("\nSaindo do sistema...\n");
+                break;
+
+            default:
+                printf("\nOpcao invalida! Digite um numero de 0 a 5.\n");
+                break;
+        }
+    }
+}
+
+/*
+- ============================================================================
+- 6. FUNÇÃO PRINCIPAL (MAIN)
+- ============================================================================
+ */
+int main() {
+    // Ponteiro principal para o vetor dinâmico de structs
+    struct Produto *listaProdutos = NULL; // aponta p inicio DO bloco de memoria onde ficarao os produtos da cooperativa, aponta p null por segurança, p evitar q aponte lixo de memoria antes da alocaçao de espaço 
+
+    // Contador total de produtos cadastrados
+    int totalProdutos = 0; // quantos produtos estao cadastrados na memoria, comeca zerada
+
+    printf("Inicializando Sistema da Cooperativa Agricola...\n");
+
+    // 1. Carrega os dados do arquivo TXT para a memória (se existir)
+    carregarDadosArquivo(&listaProdutos, &totalProdutos); // chama funcao q le o arquivo txt, & << serve p passar o endereço de memoria das variaveis, permite q a funcao modifique diretamente o ponteiro original realloc e atualize o contador total produtos 
+
+    // 2. Chama a função que contém o laço while e o switch-case do menu
+    executarMenu(&listaProdutos, &totalProdutos); // passa o endereço com >>&<< p operacoes consigam redimensionar o vetor e atualizar a quantidade total de itens, o programa fica preso dentro dessa linha de codigo ate o usuario usar o 0 p sair 
+
+    // 3. Libera a memória alocada dinamicamente antes de encerrar
+    if (listaProdutos != NULL) { // assim q o usuario digitar 0 ele verifica se existe memoria alocada
+        free(listaProdutos); // se existir memoria alocada ele libera espaco da memoria ram p computador, evita vazamento de memoria
+        listaProdutos = NULL; // garante q o ponteiro nao aponte p uma area ja liberada 
+    } 
+
+    printf("Memoria liberada. Programa encerrado com sucesso!\n");
+    return 0;
+} // encerra o programa
