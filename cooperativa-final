@@ -1,0 +1,429 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define ARQUIVO_DADOS "cooperativa.txt"
+
+struct Produto {
+    int codigo;
+    char nome[60];
+    int quantidadeEstoque;
+    float precoAtual;
+    float precoAnterior;
+    char produtor[60];
+    char categoria[40];
+};
+
+void limparBuffer() {
+    while (getchar() != '\n');
+}
+
+void lerString(char *destino, int tamanho) {
+    fgets(destino, tamanho, stdin);
+    int len = strlen(destino);
+    if (len > 0 && destino[len - 1] == '\n') {
+        destino[len - 1] = '\0';
+    }
+}
+
+int buscarIndicePorCodigo(struct Produto *lista, int total, int codigoBusca) {
+    for (int i = 0; i < total; i++) {
+        if (lista[i].codigo == codigoBusca) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+void carregarDadosArquivo(struct Produto **lista, int *total) {
+    FILE *arquivo = fopen(ARQUIVO_DADOS, "r");
+
+    if (arquivo == NULL) {
+        printf("Arquivo '%s' ainda nao existe. Iniciando base vazia.\n", ARQUIVO_DADOS);
+        *lista = NULL;
+        *total = 0;
+        return;
+    }
+
+    *lista = NULL;
+    *total = 0;
+    struct Produto temp;
+
+    while (fscanf(arquivo, "%d;%59[^;];%d;%f;%f;%59[^;];%39[^\n]\n",
+                  &temp.codigo,
+                  temp.nome,
+                  &temp.quantidadeEstoque,
+                  &temp.precoAtual,
+                  &temp.precoAnterior,
+                  temp.produtor,
+                  temp.categoria) == 7) {
+
+        struct Produto *novoBloco = (struct Produto *)realloc(*lista, (*total + 1) * sizeof(struct Produto));
+
+        if (novoBloco == NULL) {
+            printf("ERRO CRITICO: Falha ao alocar memoria ao ler o arquivo!\n");
+            fclose(arquivo);
+            return;
+        }
+
+        *lista = novoBloco;
+        (*lista)[*total] = temp;
+        (*total)++;
+    }
+
+    printf("%d produto(s) carregado(s) de '%s'.\n", *total, ARQUIVO_DADOS);
+    fclose(arquivo);
+}
+
+void salvarDadosArquivo(struct Produto *lista, int total) {
+    FILE *arquivo = fopen(ARQUIVO_DADOS, "w");
+
+    if (arquivo == NULL) {
+        printf("ERRO: Nao foi possivel abrir o arquivo '%s' para salvar!\n", ARQUIVO_DADOS);
+        return;
+    }
+
+    for (int i = 0; i < total; i++) {
+        fprintf(arquivo, "%d;%s;%d;%.2f;%.2f;%s;%s\n",
+                lista[i].codigo,
+                lista[i].nome,
+                lista[i].quantidadeEstoque,
+                lista[i].precoAtual,
+                lista[i].precoAnterior,
+                lista[i].produtor,
+                lista[i].categoria);
+    }
+
+    fclose(arquivo);
+}
+
+void cadastrarProduto(struct Produto **lista, int *total) {
+    struct Produto novo;
+
+    printf("\n--- CADASTRAR NOVO PRODUTO ---\n");
+    printf("Codigo unico do produto: ");
+    scanf("%d", &novo.codigo);
+    limparBuffer();
+
+    if (buscarIndicePorCodigo(*lista, *total, novo.codigo) != -1) {
+        printf("AVISO: Ja existe um produto cadastrado com o codigo %d!\n", novo.codigo);
+        return;
+    }
+
+    printf("Nome do produto: ");
+    lerString(novo.nome, sizeof(novo.nome));
+
+    printf("Categoria (ex: Graos, Hortifruti, Insumos): ");
+    lerString(novo.categoria, sizeof(novo.categoria));
+
+    printf("Nome do produtor cooperado: ");
+    lerString(novo.produtor, sizeof(novo.produtor));
+
+    printf("Quantidade em estoque: ");
+    scanf("%d", &novo.quantidadeEstoque);
+    limparBuffer();
+
+    printf("Preco atual (R$): ");
+    scanf("%f", &novo.precoAtual);
+    limparBuffer();
+
+    printf("Preco anterior (R$) [digite 0 se for novo]: ");
+    scanf("%f", &novo.precoAnterior);
+    limparBuffer();
+
+    struct Produto *temp = (struct Produto *)realloc(*lista, (*total + 1) * sizeof(struct Produto));
+
+    if (temp == NULL) {
+        printf("ERRO: Memoria insuficiente para cadastrar!\n");
+        return;
+    }
+
+    *lista = temp;
+    (*lista)[*total] = novo;
+    (*total)++;
+
+    salvarDadosArquivo(*lista, *total);
+    printf("SUCESSO: Produto '%s' cadastrado e salvo!\n", novo.nome);
+}
+
+void consultarProduto(struct Produto *lista, int total) {
+    if (total == 0) {
+        printf("\nNenhum produto cadastrado no sistema.\n");
+        return;
+    }
+
+    int codigoBusca;
+    printf("\n--- CONSULTAR PRODUTO ---\n");
+    printf("Digite o codigo do produto: ");
+    scanf("%d", &codigoBusca);
+    limparBuffer();
+
+    int indice = buscarIndicePorCodigo(lista, total, codigoBusca);
+
+    if (indice == -1) {
+        printf("Produto com codigo %d nao encontrado.\n", codigoBusca);
+        return;
+    }
+
+    struct Produto *p = &lista[indice];
+
+    printf("\n========================================\n");
+    printf("DADOS DO PRODUTO (CODIGO: %d)\n", p->codigo);
+    printf("========================================\n");
+    printf("Nome do Produto   : %s\n", p->nome);
+    printf("Categoria         : %s\n", p->categoria);
+    printf("Produtor          : %s\n", p->produtor);
+    printf("Qtd. em Estoque   : %d\n", p->quantidadeEstoque);
+    printf("Preco Anterior    : R$ %.2f\n", p->precoAnterior);
+    printf("Preco Atual       : R$ %.2f\n", p->precoAtual);
+    printf("========================================\n");
+}
+
+void alterarProduto(struct Produto *lista, int total) {
+    if (total == 0) {
+        printf("\nNenhum produto cadastrado para alterar.\n");
+        return;
+    }
+
+    int codigoBusca;
+    printf("\n--- ALTERAR PRODUTO ---\n");
+    printf("Digite o codigo do produto a alterar: ");
+    scanf("%d", &codigoBusca);
+    limparBuffer();
+
+    int indice = buscarIndicePorCodigo(lista, total, codigoBusca);
+
+    if (indice == -1) {
+        printf("Produto com codigo %d nao encontrado.\n", codigoBusca);
+        return;
+    }
+
+    struct Produto *p = &lista[indice];
+    int opcaoAlterar = -1;
+    float novoPreco;
+
+    while (opcaoAlterar != 0) {
+        printf("\nEditando [%d - %s]:\n", p->codigo, p->nome);
+        printf("1. Alterar Nome\n");
+        printf("2. Alterar Categoria\n");
+        printf("3. Alterar Produtor\n");
+        printf("4. Alterar Quantidade em Estoque\n");
+        printf("5. Alterar Preco Atual (salva o antigo em Preco Anterior)\n");
+        printf("6. Alterar Todos os Campos\n");
+        printf("0. Concluir e Salvar no Arquivo\n");
+        printf("Escolha uma opcao: ");
+        scanf("%d", &opcaoAlterar);
+        limparBuffer();
+
+        switch (opcaoAlterar) {
+            case 1:
+                printf("Novo nome: ");
+                lerString(p->nome, sizeof(p->nome));
+                break;
+
+            case 2:
+                printf("Nova categoria: ");
+                lerString(p->categoria, sizeof(p->categoria));
+                break;
+
+            case 3:
+                printf("Novo produtor: ");
+                lerString(p->produtor, sizeof(p->produtor));
+                break;
+
+            case 4:
+                printf("Nova quantidade em estoque: ");
+                scanf("%d", &p->quantidadeEstoque);
+                limparBuffer();
+                break;
+
+            case 5:
+                printf("Novo preco atual (R$): ");
+                scanf("%f", &novoPreco);
+                limparBuffer();
+                p->precoAnterior = p->precoAtual;
+                p->precoAtual = novoPreco;
+                printf("Preco anterior atualizado para R$ %.2f.\n", p->precoAnterior);
+                break;
+
+            case 6:
+                printf("Novo nome: ");
+                lerString(p->nome, sizeof(p->nome));
+                printf("Nova categoria: ");
+                lerString(p->categoria, sizeof(p->categoria));
+                printf("Novo produtor: ");
+                lerString(p->produtor, sizeof(p->produtor));
+                printf("Nova quantidade em estoque: ");
+                scanf("%d", &p->quantidadeEstoque);
+                limparBuffer();
+                printf("Novo preco atual (R$): ");
+                scanf("%f", &novoPreco);
+                limparBuffer();
+                p->precoAnterior = p->precoAtual;
+                p->precoAtual = novoPreco;
+                break;
+
+            case 0:
+                salvarDadosArquivo(lista, total);
+                printf("Alteracoes salvas com sucesso em '%s'!\n", ARQUIVO_DADOS);
+                break;
+
+            default:
+                printf("Opcao invalida!\n");
+                break;
+        }
+    }
+}
+
+void removerProduto(struct Produto **lista, int *total) {
+    if (*total == 0) {
+        printf("\nNenhum produto cadastrado para remover.\n");
+        return;
+    }
+
+    int codigoBusca;
+    printf("\n--- REMOVER PRODUTO ---\n");
+    printf("Digite o codigo do produto a excluir: ");
+    scanf("%d", &codigoBusca);
+    limparBuffer();
+
+    int indice = buscarIndicePorCodigo(*lista, *total, codigoBusca);
+
+    if (indice == -1) {
+        printf("Produto com codigo %d nao encontrado.\n", codigoBusca);
+        return;
+    }
+
+    char confirmacao;
+    printf("Deseja realmente excluir '%s' (Codigo %d)? (S/N): ",
+           (*lista)[indice].nome, (*lista)[indice].codigo);
+    scanf("%c", &confirmacao);
+    limparBuffer();
+
+    if (confirmacao != 'S' && confirmacao != 's') {
+        printf("Exclusao cancelada.\n");
+        return;
+    }
+
+    for (int i = indice; i < (*total) - 1; i++) {
+        (*lista)[i] = (*lista)[i + 1];
+    }
+
+    (*total)--;
+
+    if (*total == 0) {
+        free(*lista);
+        *lista = NULL;
+    } else {
+        struct Produto *temp = (struct Produto *)realloc(*lista, (*total) * sizeof(struct Produto));
+        if (temp != NULL) {
+            *lista = temp;
+        }
+    }
+
+    salvarDadosArquivo(*lista, *total);
+    printf("Produto removido com sucesso!\n");
+}
+
+void exibirTodosProdutos(struct Produto *lista, int total) {
+    if (total == 0) {
+        printf("\nNenhum produto cadastrado na cooperativa.\n");
+        return;
+    }
+
+    printf("\n=========================================================================================================\n");
+    printf("                                  ESTOQUE DA COOPERATIVA AGRICOLA (%d ITENS)\n", total);
+    printf("=========================================================================================================\n");
+    printf("%-6s | %-20s | %-14s | %-18s | %-8s | %-11s | %-11s\n",
+           "COD", "PRODUTO", "CATEGORIA", "PRODUTOR", "ESTOQUE", "PRECO ANT.", "PRECO ATUAL");
+    printf("---------------------------------------------------------------------------------------------------------\n");
+
+    for (int i = 0; i < total; i++) {
+        printf("%-6d | %-20.20s | %-14.14s | %-18.18s | %-8d | R$ %-8.2f | R$ %-8.2f\n",
+               lista[i].codigo,
+               lista[i].nome,
+               lista[i].categoria,
+               lista[i].produtor,
+               lista[i].quantidadeEstoque,
+               lista[i].precoAnterior,
+               lista[i].precoAtual);
+    }
+
+    printf("=========================================================================================================\n");
+}
+
+void executarMenu(struct Produto **lista, int *total) {
+    int opcao = -1;
+
+    while (opcao != 0) {
+        printf("\n============================================\n");
+        printf("      COOPERATIVA AGRICOLA - MENU CRUD      \n");
+        printf("============================================\n");
+        printf("1. Cadastrar Produto\n");
+        printf("2. Consultar Produto (por codigo)\n");
+        printf("3. Alterar Produto\n");
+        printf("4. Remover Produto\n");
+        printf("5. Exibir Todos os Produtos\n");
+        printf("0. Sair\n");
+        printf("--------------------------------------------\n");
+        printf("Escolha uma opcao: ");
+
+        if (scanf("%d", &opcao) != 1) {
+            limparBuffer();
+            printf("Entrada invalida! Digite apenas numeros.\n");
+            opcao = -1;
+            continue;
+        }
+        limparBuffer();
+
+        switch (opcao) {
+            case 1:
+                cadastrarProduto(lista, total);
+                break;
+
+            case 2:
+                consultarProduto(*lista, *total);
+                break;
+
+            case 3:
+                alterarProduto(*lista, *total);
+                break;
+
+            case 4:
+                removerProduto(lista, total);
+                break;
+
+            case 5:
+                exibirTodosProdutos(*lista, *total);
+                break;
+
+            case 0:
+                printf("\nSaindo do sistema...\n");
+                break;
+
+            default:
+                printf("\nOpcao invalida! Digite um numero de 0 a 5.\n");
+                break;
+        }
+    }
+}
+
+int main() {
+    struct Produto *listaProdutos = NULL;
+
+    int totalProdutos = 0;
+
+    printf("Inicializando Sistema da Cooperativa Agricola...\n");
+
+    carregarDadosArquivo(&listaProdutos, &totalProdutos);
+
+    executarMenu(&listaProdutos, &totalProdutos);
+
+    if (listaProdutos != NULL) {
+        free(listaProdutos);
+        listaProdutos = NULL;
+    }
+
+    printf("Memoria liberada. Programa encerrado com sucesso!\n");
+    return 0;
+}
